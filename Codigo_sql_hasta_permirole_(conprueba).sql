@@ -278,6 +278,11 @@ left JOIN Permission as c on a.permission_id =c.id_permi;
 
 
 
+select * FROM Permirole as a
+
+left JOIN [Role] as b on a.role_id = b.id_role
+left JOIN Permission as c on a.permission_id =c.id_permi;
+
 
 
 
