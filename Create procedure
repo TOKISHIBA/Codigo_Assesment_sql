@@ -1,0 +1,214 @@
+
+--------------------------------------------------------------------------STORE PROCEDURE---------------------------------------------------------------------------------------
+--ACTUALIZADO ULTIMO
+
+ CREATE PROCEDURE GetUserPermissionsUpdated
+    @userId BIGINT,
+    @entityCatalogId BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Temporary table to store permissions with user and company details
+    DECLARE @Permissions TABLE (
+        UserId BIGINT,
+        UserName NVARCHAR(255),
+        CompanyId BIGINT,
+        CompanyName NVARCHAR(255),
+        PermissionName NVARCHAR(255),
+        CanCreate BIT DEFAULT 0,
+        CanRead BIT DEFAULT 0,
+        CanUpdate BIT DEFAULT 0,
+        CanDelete BIT DEFAULT 0,
+        CanImport BIT DEFAULT 0,
+        CanExport BIT DEFAULT 0,
+        RecordId BIGINT NULL,
+        PermissionSource NVARCHAR(50)
+    );
+
+    -- Step 1: Check PermiUserRecord first (record-level permissions)
+    INSERT INTO @Permissions (
+        UserId, UserName, CompanyId, CompanyName,
+        PermissionName, CanCreate, CanRead, CanUpdate, 
+        CanDelete, CanImport, CanExport, RecordId, PermissionSource
+    )
+    SELECT 
+        U.id_user,
+        U.user_username,
+        C.id_compa,
+        C.compa_name,
+        P.name,
+        CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_create ELSE 0 END AS BIT),
+        CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_read ELSE 0 END AS BIT),
+        CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_update ELSE 0 END AS BIT),
+        CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_delete ELSE 0 END AS BIT),
+        CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_import ELSE 0 END AS BIT),
+        CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_export ELSE 0 END AS BIT),
+        PU.peusr_record,
+        'PermiUserRecord'
+    FROM 
+        PermiUserRecord PU
+    JOIN 
+        UserCompany UC ON PU.usercompany_id = UC.company_id
+    JOIN 
+        Company C ON UC.company_id = C.id_compa
+    JOIN 
+        [User] U ON UC.user_id = U.id_user
+    JOIN 
+        Permission P ON PU.permission_id = P.id_permi
+    JOIN 
+        EntityCatalog E ON PU.entitycatalog_id = E.id_entit
+    WHERE 
+        U.id_user = @userId AND 
+        E.id_entit = @entityCatalogId;
+
+    -- Step 2: If no record-level permissions, check PermiUser (entity-level permissions)
+    IF NOT EXISTS (SELECT 1 FROM @Permissions)
+    BEGIN
+        INSERT INTO @Permissions (
+            UserId, UserName, CompanyId, CompanyName,
+            PermissionName, CanCreate, CanRead, CanUpdate, 
+            CanDelete, CanImport, CanExport, PermissionSource
+        )
+        SELECT 
+           U.id_user,
+        U.user_username,
+        C.id_compa,
+        C.compa_name,
+        P.name,
+            CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_create ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_read ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_update ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_delete ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_import ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.peusr_include = 1 THEN P.can_export ELSE 0 END AS BIT),
+            'PermiUser'
+        FROM 
+            PermiUser PU
+        JOIN 
+            UserCompany UC ON PU.usercompany_id = UC.company_id
+        JOIN 
+            Company C ON UC.company_id = C.id_compa
+        JOIN 
+            [User] U ON UC.user_id = U.id_user
+        JOIN 
+            Permission P ON PU.permission_id = P.id_permi
+        JOIN 
+            EntityCatalog E ON PU.entitycatalog_id = E.id_entit
+        WHERE 
+            U.id_user = @userId AND 
+            E.id_entit = @entityCatalogId;
+    END;
+
+    -- Step 3: If no user-specific permissions, check user's roles
+    IF NOT EXISTS (SELECT 1 FROM @Permissions)
+    BEGIN
+        -- First, try PermiRoleRecord for roles
+        INSERT INTO @Permissions (
+            UserId, UserName, CompanyId, CompanyName,
+            PermissionName, CanCreate, CanRead, CanUpdate, 
+            CanDelete, CanImport, CanExport, RecordId, PermissionSource
+        )
+        SELECT 
+           U.id_user,
+        U.user_username,
+        C.id_compa,
+        C.compa_name,
+        P.name,
+            CAST(CASE WHEN PU.perrc_include = 1 THEN P.can_create ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.perrc_include = 1 THEN P.can_read ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.perrc_include = 1 THEN P.can_update ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.perrc_include = 1 THEN P.can_delete ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.perrc_include = 1 THEN P.can_import ELSE 0 END AS BIT),
+            CAST(CASE WHEN PU.perrc_include = 1 THEN P.can_export ELSE 0 END AS BIT),
+            PU.perrc_record,
+            'PermiRoleRecord'
+        FROM 
+            PermiRoleRecord PU
+        JOIN 
+            UserRole UR ON PU.role_id = UR.role_id
+        JOIN 
+            UserCompany UC ON UR.user_id = UC.user_id
+        JOIN 
+            Company C ON UC.company_id = C.id_compa
+        JOIN 
+            [User] U ON UC.user_id = U.id_user
+        JOIN 
+            Permission P ON PU.permission_id = P.id_permi
+        JOIN 
+            EntityCatalog E ON PU.entitycatalog_id = E.id_entit
+        WHERE 
+            U.id_user = @userId AND 
+            E.id_entit = @entityCatalogId;
+
+        -- If no role record-level permissions, check PermiRole
+        IF NOT EXISTS (SELECT 1 FROM @Permissions)
+        BEGIN
+            INSERT INTO @Permissions (
+                UserId, UserName, CompanyId, CompanyName,
+                PermissionName, CanCreate, CanRead, CanUpdate, 
+                CanDelete, CanImport, CanExport, PermissionSource
+            )
+            SELECT 
+                U.id_user,
+        U.user_username,
+        C.id_compa,
+        C.compa_name,
+        P.name,
+                CAST(CASE WHEN PU.perol_include = 1 THEN P.can_create ELSE 0 END AS BIT),
+                CAST(CASE WHEN PU.perol_include = 1 THEN P.can_read ELSE 0 END AS BIT),
+                CAST(CASE WHEN PU.perol_include = 1 THEN P.can_update ELSE 0 END AS BIT),
+                CAST(CASE WHEN PU.perol_include = 1 THEN P.can_delete ELSE 0 END AS BIT),
+                CAST(CASE WHEN PU.perol_include = 1 THEN P.can_import ELSE 0 END AS BIT),
+                CAST(CASE WHEN PU.perol_include = 1 THEN P.can_export ELSE 0 END AS BIT),
+                'PermiRole'
+            FROM 
+                PermiRole PU
+            JOIN 
+                UserRole UR ON PU.role_id = UR.role_id
+            JOIN 
+                UserCompany UC ON UR.user_id = UC.user_id
+            JOIN 
+                Company C ON UC.company_id = C.id_compa
+            JOIN 
+                [User] U ON UC.user_id = U.id_user
+            JOIN 
+                Permission P ON PU.permission_id = P.id_permi
+            JOIN 
+                EntityCatalog E ON PU.entitycatalog_id = E.id_entit
+            WHERE 
+                U.id_user = @userId AND 
+                E.id_entit = @entityCatalogId;
+        END;
+    END;
+
+    -- Return consolidated permissions with user and company details
+    SELECT 
+        UserId,
+        UserName,
+        CompanyId,
+        CompanyName,
+        PermissionName,
+        MAX(CAST(CanCreate AS INT)) AS CanCreate,
+        MAX(CAST(CanRead AS INT)) AS CanRead,
+        MAX(CAST(CanUpdate AS INT)) AS CanUpdate,
+        MAX(CAST(CanDelete AS INT)) AS CanDelete,
+        MAX(CAST(CanImport AS INT)) AS CanImport,
+        MAX(CAST(CanExport AS INT)) AS CanExport,
+        PermissionSource
+    FROM @Permissions
+    GROUP BY UserId, UserName, CompanyId, CompanyName, PermissionName, PermissionSource;
+END;
+
+
+
+
+-- Usuarios conectados a las compañias
+
+SELECT 
+  U.user_username,
+  C.compa_tradename
+ FROM UserCompany UC
+LEFT JOIN [User] U ON U.id_user = UC.user_id
+LEFT JOIN Company C ON C.id_compa = UC.company_id;
+
