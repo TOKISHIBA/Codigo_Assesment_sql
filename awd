@@ -1,0 +1,146 @@
+-- Create Company Table
+CREATE TABLE Company (
+    id_compa BIGINT IDENTITY(1,1) PRIMARY KEY, -- Identificador único para la compañía
+    compa_name NVARCHAR(255) NOT NULL, -- Nombre legal completo de la compañía
+    compa_tradename NVARCHAR(255) NOT NULL, -- Nombre comercial o marca de la compañía
+    compa_doctype NVARCHAR(2) NOT NULL 
+        CONSTRAINT CK_Company_DocType CHECK (compa_doctype IN ('NI', 'CC', 'CE', 'PP', 'OT')), -- Tipo de documento de identificación de la compañía
+    compa_docnum NVARCHAR(255) NOT NULL, -- Número de identificación fiscal o documento legal de la compañía
+    compa_address NVARCHAR(255) NOT NULL, -- Dirección física de la compañía
+    compa_city NVARCHAR(255) NOT NULL, -- Ciudad donde está ubicada la compañía
+    compa_state NVARCHAR(255) NOT NULL, -- Departamento o estado donde está ubicada la compañía
+    compa_country NVARCHAR(255) NOT NULL, -- País donde está ubicada la compañía
+    compa_industry NVARCHAR(255) NOT NULL, -- Sector industrial al que pertenece la compañía
+    compa_phone NVARCHAR(255) NOT NULL, -- Número de teléfono principal de la compañía
+    compa_email NVARCHAR(255) NOT NULL, -- Dirección de correo electrónico principal de la compañía
+    compa_website NVARCHAR(255) NULL, -- Sitio web oficial de la compañía
+    compa_logo NVARCHAR(MAX) NULL, -- Logo oficial de la compañía
+    compa_active BIT NOT NULL DEFAULT 1 -- Indica si la compañía está activa (1) o inactiva (0)
+);
+
+-- Create BranchOffice Table
+CREATE TABLE BranchOffice (
+    id_broff BIGINT IDENTITY(1,1) PRIMARY KEY, -- Identificador único para la sucursal
+    company_id BIGINT NOT NULL 
+        CONSTRAINT FK_BranchOffice_Company FOREIGN KEY REFERENCES Company(id_compa), -- Compañía a la que pertenece esta sucursal
+    broff_name NVARCHAR(255) NOT NULL, -- Nombre descriptivo de la sucursal
+    broff_code NVARCHAR(255) NOT NULL, -- Código único que identifica la sucursal dentro de la empresa
+    broff_address NVARCHAR(255) NOT NULL, -- Dirección física de la sucursal
+    broff_city NVARCHAR(255) NOT NULL, -- Ciudad donde está ubicada la sucursal
+    broff_state NVARCHAR(255) NOT NULL, -- Departamento o estado donde está ubicada la sucursal
+    broff_country NVARCHAR(255) NOT NULL, -- País donde está ubicada la sucursal
+    broff_phone NVARCHAR(255) NOT NULL, -- Número de teléfono de la sucursal
+    broff_email NVARCHAR(255) NOT NULL, -- Dirección de correo electrónico de la sucursal
+    broff_active BIT NOT NULL DEFAULT 1, -- Indica si la sucursal está activa (1) o inactiva (0)
+    CONSTRAINT UQ_Company_BranchCode UNIQUE (company_id, broff_code) -- Constraint para asegurar unicidad del código en relación a la compañía
+);
+
+-- Create CostCenter Table
+CREATE TABLE CostCenter (
+    id_cosce BIGINT IDENTITY(1,1) PRIMARY KEY, -- Identificador único para el centro de costo
+    company_id BIGINT NOT NULL 
+        CONSTRAINT FK_CostCenter_Company FOREIGN KEY REFERENCES Company(id_compa), -- Compañía a la que pertenece este centro de costo
+    cosce_parent_id BIGINT NULL 
+        CONSTRAINT FK_CostCenter_Parent FOREIGN KEY REFERENCES CostCenter(id_cosce), -- Centro de costo superior en la jerarquía organizacional
+    cosce_code NVARCHAR(255) NOT NULL, -- Código único que identifica el centro de costo
+    cosce_name NVARCHAR(255) NOT NULL, -- Nombre descriptivo del centro de costo
+    cosce_description NVARCHAR(MAX) NULL, -- Descripción detallada del centro de costo y su propósito
+    cosce_budget DECIMAL(15,2) NOT NULL DEFAULT 0, -- Presupuesto asignado al centro de costo
+    cosce_level SMALLINT NOT NULL DEFAULT 1 
+        CONSTRAINT CK_CostCenter_Level CHECK (cosce_level > 0), -- Nivel en la jerarquía (debe ser mayor que 0)
+    cosce_active BIT NOT NULL DEFAULT 1, -- Indica si el centro de costo está activo (1) o inactivo (0)
+    CONSTRAINT UQ_Company_CostCenterCode UNIQUE (company_id, cosce_code) -- Constraint para asegurar unicidad del código en relación a la compañía
+);
+
+-- Create EntityCatalog Table
+CREATE TABLE EntityCatalog (
+    id_entit INT IDENTITY(1,1) PRIMARY KEY, -- Identificador único para el elemento del catálogo de entidades
+    entit_name NVARCHAR(255) NOT NULL UNIQUE, -- Nombre del modelo asociado al elemento del catálogo 
+    entit_descrip NVARCHAR(255) NOT NULL, -- Descripción del elemento del catálogo 
+    entit_active BIT NOT NULL DEFAULT 1, -- Indica si el elemento del catálogo está activo (1) o inactivo (0)
+    entit_config NVARCHAR(MAX) NULL  -- Configuración adicional para el elemento del catálogo 
+);
+
+-- Create Permission Table
+CREATE TABLE Permission (
+    id_permi BIGINT IDENTITY(1,1) PRIMARY KEY,  -- Identificador único para el permiso 
+    name NVARCHAR(255) NOT NULL,  -- Nombre descriptivo del permiso 
+    description NVARCHAR(MAX) NULL,  -- Descripción detallada del permiso y su propósito 
+    can_create BIT NOT NULL DEFAULT 0,
+    can_read BIT NOT NULL DEFAULT 0,
+    can_update BIT NOT NULL DEFAULT 0,
+    can_delete BIT NOT NULL DEFAULT 0,
+    can_import BIT NOT NULL DEFAULT 0,
+    can_export BIT NOT NULL DEFAULT 0 
+);
+
+-- Create Role Table
+CREATE TABLE Role (
+   id_role BIGINT IDENTITY(1,1) PRIMARY KEY,
+   company_id BIGINT NOT NULL 
+       CONSTRAINT FK_Role_Company FOREIGN KEY REFERENCES Company(id_compa),
+   role_name NVARCHAR(255) NOT NULL,
+   role_code NVARCHAR(255) NOT NULL UNIQUE,
+   role_description NVARCHAR(MAX),
+   role_active BIT NOT NULL DEFAULT 1,
+   CONSTRAINT UQ_Company_RoleCode UNIQUE (company_id , role_code)
+);
+
+-- Create PermiUser Table for User Permissions Management 
+CREATE TABLE PermiUser (
+   id_peusr BIGINT IDENTITY(1,1) PRIMARY KEY,
+   usercompany_id BIGINT NOT NULL 
+       CONSTRAINT FK_PermiUser_UserCompany FOREIGN KEY REFERENCES UserCompany(id_useco),
+   permission_id BIGINT NOT NULL 
+       CONSTRAINT FK_PermiUser_Permission FOREIGN KEY REFERENCES Permission(id_permi),
+   entitycatalog_id BIGINT NOT NULL 
+       CONSTRAINT FK_PermiUser_EntityCatalog FOREIGN KEY REFERENCES EntityCatalog(id_entit),
+   peusr_include BIT NOT NULL DEFAULT 1,
+   CONSTRAINT UQ_UserCompany_Permission_Entity UNIQUE (usercompany_id , permission_id , entitycatalog_id)
+);
+
+-- Create PermiRole Table for Role Permissions Management 
+CREATE TABLE PermiRole (
+   id_perol BIGINT IDENTITY(1,1) PRIMARY KEY,
+   role_id BIGINT NOT NULL 
+       CONSTRAINT FK_PermiRole_Role FOREIGN KEY REFERENCES Role(id_role),
+   permission_id BIGINT NOT NULL  
+       CONSTRAINT FK_PermiRole_Permission FOREIGN KEY REFERENCES Permission(id_permi),
+   entitycatalog_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiRole_EntityCatalog FOREIGN KEY REFERENCES EntityCatalog(id_entit),
+   perol_include BIT NOt NULL DEFAULT 1,
+   perol_record BIGINTNULL,
+   CONSTRAINT UQ_Role_Permission_Entity_Record UNIQUE (role_id , permission_id , entitycatalog_id , perol_record)
+);
+
+-- Create PermiUserRecord Table for User Record Permissions Management 
+CREATE TABLE PermiUserRecord (
+   id_peusr_rec BIGINT IDENTITY(1,1) PRIMARY KEY,
+   usercompany_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiUserRecord_UserCompany FOREIGN KEY REFERENCES UserCompany(id_useco),
+   permission_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiUserRecord_Permission FOREIGN KEY REFERENCES Permission(id_permi),
+   entitycatalog_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiUserRecord_EntityCatalog FOREIGN KEY REFERENCES EntityCatalog(id_entit),
+   peusr_record BIGINT NOt NULL,
+   peusr_include BIT NOt NULL DEFAULT 1,
+   CONSTRAINT UQ_UserCompany_Permission_Entity_Record UNIQUE (usercompany_id , permission_id , entitycatalog_id , peusr_record)
+);
+
+-- Create PermiRoleRecord Table for Role Record Permissions Management 
+CREATE TABLE PermiRoleRecord (
+   id_perrc BIGINT IDENTITY(1,1) PRIMARY KEY,
+   role_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiRoleRecord_Role FOREIGN KEY REFERENCES Role(id_role),
+   permission_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiRoleRecord_Permission FOREIGN KEY REFERENCES Permission(id_permi),
+   entitycatalog_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiRoleRecord_EntityCatalog FOREIGN KEY REFERENCES EntityCatalog(id_entit),
+     userrole_id BIGINT NOt NULL  
+       CONSTRAINT FK_PermiRoleRecord_userrole FOREIGN KEY REFERENCES userole(id_usrol),  
+   perrc_record BIGINT NOt NULL,
+   perrc_include BIT NOt NULL DEFAULT 1,
+   CONSTRAINT UQ_Role_Permission_Entity_Record UNIQUE (role_id , permission_id , entitycatalog_id , perrc_record)
+);
+
+*/
